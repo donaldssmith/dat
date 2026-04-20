@@ -1,0 +1,7 @@
+# 拦截所有生成的元数据文件
+dist/*/meta.txt
+
+# 保留原有的拦截规则
+research/
+src/
+assets/
