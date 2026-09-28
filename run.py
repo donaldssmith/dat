@@ -47,6 +47,9 @@ def main() -> None:
     worker.add_argument("--project-root")
     worker.add_argument("--state")
     worker.add_argument("--once", action="store_true")
+    worker.add_argument("--discord-inbox", action="store_true")
+    worker.add_argument("--watch-discord", action="store_true")
+    worker.add_argument("--poll-seconds", type=float)
     sub.add_parser("deploy", help="运行兼容旧版部署台")
     sub.add_parser("library", help="打开本地书库合成器")
     args, passthrough = parser.parse_known_args()
@@ -68,6 +71,12 @@ def main() -> None:
                 child_args.extend([flag, str(value)])
         if getattr(args, "once", False):
             child_args.append("--once")
+        if getattr(args, "discord_inbox", False):
+            child_args.append("--discord-inbox")
+        if getattr(args, "watch_discord", False):
+            child_args.append("--watch-discord")
+        if getattr(args, "poll_seconds", None) is not None:
+            child_args.extend(["--poll-seconds", str(args.poll_seconds)])
         worker_main(child_args)
     elif args.command == "deploy":
         sys.argv = [str(ROOT / "app" / "tools" / "切分部署台.py"), *passthrough]

@@ -19,6 +19,12 @@ python run.py backend
 # 处理队列中的一条 F4S_JOB
 python run.py worker --once
 
+# 从 Discord 导入请求并处理队列中的一条任务
+python run.py worker --discord-inbox --once
+
+# 持续轮询 Discord 并处理新请求
+python run.py worker --watch-discord
+
 # 继续使用旧部署台的切分/发布参数
 python run.py deploy --help
 
@@ -57,6 +63,8 @@ Invoke-RestMethod http://127.0.0.1:8787/api/jobs
 ```
 
 向 `POST /api/jobs` 提交完整的 `F4S_JOB v1` JSON 后，任务会写入 `.f4s/jobs.json`。worker 负责领取任务、处理 PDF/元数据并写回 `succeeded` 或 `failed` 状态。相同消息 ID 会幂等去重。
+
+`--discord-inbox` 使用 `config/local/部署台.bot.json` 读取 Bot Token 和频道 ID，拉取频道中的 `F4S JOB` 代码块，校验通过后写入同一个任务队列。需要常驻运行时使用 `--watch-discord`，它默认每 30 秒轮询一次。Discord 消息本身不会直接触发文件发布。
 
 ## 配置
 

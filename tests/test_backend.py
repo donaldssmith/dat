@@ -1,9 +1,12 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from app.backend.protocol import JobValidationError, parse_job
 from app.backend.store import JobStore
+from app.backend.discord import parse_message, sync_messages
 
 
 def valid_job(**overrides):
@@ -23,6 +26,33 @@ def valid_job(**overrides):
 
 
 class BackendTests(unittest.TestCase):
+    def test_discord_message_extracts_job(self):
+        job = valid_job()
+        content = "**F4S JOB**\n```json\n" + json.dumps(job) + "\n```"
+        parsed = parse_message({"id": "discord-1", "content": content})
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed.book_id, "6505")
+
+    def test_discord_message_ignores_plain_text(self):
+        self.assertIsNone(parse_message({"id": "discord-2", "content": "hello"}))
+
+    def test_discord_sync_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "config" / "local").mkdir(parents=True)
+            (root / "config" / "local" / "部署台.bot.json").write_text(
+                json.dumps({"bot_token": "test", "channel_id": "123"}), encoding="utf-8"
+            )
+            store = JobStore(root / "jobs.json")
+            job = valid_job()
+            message = {"id": "discord-3", "content": "**F4S JOB**\n```json\n" + json.dumps(job) + "\n```"}
+            with patch("app.backend.discord.fetch_messages", return_value=[message]):
+                first = sync_messages(store, root)
+                second = sync_messages(store, root)
+            self.assertEqual(first["accepted"], 1)
+            self.assertEqual(second["duplicates"], 1)
+            self.assertEqual(len(store.list()), 1)
+
     def test_protocol_rejects_wrong_version(self):
         with self.assertRaises(JobValidationError):
             parse_job(valid_job(version=2))

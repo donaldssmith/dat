@@ -9,10 +9,12 @@ import argparse
 import importlib.util
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
 from .store import JobStore
+from .discord import DiscordError, sync_messages
 
 
 def _load_legacy(project_root: Path):
@@ -74,14 +76,43 @@ def run_once(store: JobStore, project_root: Path) -> bool:
     return True
 
 
+def import_discord(store: JobStore, project_root: Path) -> bool:
+    try:
+        stats = sync_messages(store, project_root)
+        print(
+            "Discord 收件箱："
+            f"读取 {stats['fetched']} 条，新增 {stats['accepted']} 条，"
+            f"重复 {stats['duplicates']} 条，忽略 {stats['ignored']} 条"
+        )
+        return True
+    except DiscordError as exc:
+        print(f"Discord 收件箱读取失败：{exc}")
+        return False
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Fool4School F4S_JOB worker")
     parser.add_argument("--project-root", default=".")
     parser.add_argument("--state", default=".f4s/jobs.json")
     parser.add_argument("--once", action="store_true", help="只处理一条任务")
+    parser.add_argument("--discord-inbox", action="store_true", help="先从 Discord 收件箱导入 F4S_JOB")
+    parser.add_argument("--watch-discord", action="store_true", help="持续轮询 Discord 并处理新请求")
+    parser.add_argument("--poll-seconds", type=float, default=30.0, help="Discord 轮询间隔，默认 30 秒")
     args = parser.parse_args(argv)
     store = JobStore(args.state)
     root = Path(args.project_root).resolve()
+    if args.watch_discord:
+        while True:
+            if not import_discord(store, root) and args.once:
+                return
+            while run_once(store, root):
+                pass
+            if args.once:
+                return
+            time.sleep(max(5.0, args.poll_seconds))
+
+    if args.discord_inbox and not import_discord(store, root):
+        return
     if args.once:
         run_once(store, root)
         return
