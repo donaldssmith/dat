@@ -63,6 +63,7 @@ class BackendTests(unittest.TestCase):
             first = store.submit(valid_job(), source_message_id="discord-1")
             second = store.submit(valid_job(), source_message_id="discord-1")
             self.assertEqual(first["id"], second["id"])
+            self.assertEqual(first["sourceMessageId"], "discord-1")
             self.assertEqual(len(store.list()), 1)
 
     def test_store_claim_and_complete(self):
@@ -75,6 +76,24 @@ class BackendTests(unittest.TestCase):
             done = store.complete(record["id"], {"ok": True})
             self.assertEqual(done["status"], "succeeded")
             self.assertTrue(done["result"]["ok"])
+
+    def test_store_failed_tasks_can_be_requeued(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = JobStore(Path(temp) / "jobs.json")
+            record = store.submit(valid_job(), source_message_id="discord-failed")
+            claimed = store.claim_next()
+            self.assertEqual(claimed["id"], record["id"])
+            failed = store.fail(record["id"], "temporary upstream outage")
+            self.assertEqual(failed["status"], "failed")
+            self.assertEqual(failed["error"], "temporary upstream outage")
+
+            self.assertEqual(store.retry_failed(), 1)
+            retried = store.get(record["id"])
+            self.assertEqual(retried["status"], "pending")
+            self.assertEqual(retried["error"], "")
+            self.assertEqual(retried["lastError"], "temporary upstream outage")
+            self.assertEqual(retried["attempts"], 1)
+            self.assertEqual(store.retry_failed(), 0)
 
 
 if __name__ == "__main__":

@@ -49,6 +49,8 @@ def main() -> None:
     worker.add_argument("--once", action="store_true")
     worker.add_argument("--discord-inbox", action="store_true")
     worker.add_argument("--watch-discord", action="store_true")
+    worker.add_argument("--discord-cleanup", action="store_true")
+    worker.add_argument("--retry-failed", action="store_true")
     worker.add_argument("--poll-seconds", type=float)
     sub.add_parser("deploy", help="运行兼容旧版部署台")
     sub.add_parser("library", help="打开本地书库合成器")
@@ -75,6 +77,10 @@ def main() -> None:
             child_args.append("--discord-inbox")
         if getattr(args, "watch_discord", False):
             child_args.append("--watch-discord")
+        if getattr(args, "discord_cleanup", False):
+            child_args.append("--discord-cleanup")
+        if getattr(args, "retry_failed", False):
+            child_args.append("--retry-failed")
         if getattr(args, "poll_seconds", None) is not None:
             child_args.extend(["--poll-seconds", str(args.poll_seconds)])
         worker_main(child_args)
