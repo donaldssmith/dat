@@ -1,0 +1,10 @@
+{
+  "bot_token": "",
+  "channel_id": "",
+  "message_limit": 50,
+  "show_handled_messages": false,
+  "hide_already_in_cloud": true,
+  "hide_invalid_links": true,
+  "dedupe_by_book": true,
+  "delete_processed_messages": false
+}

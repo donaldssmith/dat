@@ -1,7 +1,33 @@
-# 拦截所有生成的元数据文件
-dist/*/meta.txt
+# 运行时状态与本地缓存
+.f4s/
+__pycache__/
+*.pyc
+**/__pycache__/
+**/*.pyc
 
-# 保留原有的拦截规则
-research/
-src/
-assets/
+# 生成物和本地大文件
+dist/*/*.dat
+dist/*/meta.txt
+data/exports/*.pdf
+data/source/*.pdf
+data/ocr/*.pdf
+data/logs/
+config/local/*.json
+!config/local/.gitkeep
+
+# 代码、配置模板和研究资料需要可追踪
+!app/
+!app/**
+!docs/research/
+!docs/research/**
+!docs/archive/
+!docs/archive/**
+!docs/
+!docs/**
+
+# 逆向抓取的原始网页和 vendor 不进入版本库
+docs/research/**/EbookPlus 样本 A/*.js
+docs/research/**/EbookPlus 样本 A/*.html
+docs/research/**/EbookPlus 样本 B/*.js
+docs/research/**/EbookPlus 样本 B/*.html
+docs/research/**/EbookPlus 样本 B/vendor/

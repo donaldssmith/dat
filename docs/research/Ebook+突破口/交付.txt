@@ -1,0 +1,314 @@
+❯ 阅读EbookPlus 研究交接.md，并且开始工作，除非你觉得我需要帮你提供更多信息（比如控制台运行指令等等，但是这些一切要等你
+  静态研究结束后批量给我，而不是自己工作没搞完想要别的）
+
+  Searched for 3 patterns, read 1 file (ctrl+o to expand)
+
+● 明白了。这是一份详细的研究任务书，我需要先静默读完所有材料，再按指定格式交付结论。让我先找到所有材料。
+
+  Searched for 5 patterns, listed 1 directory (ctrl+o to expand)
+
+● 样本 A 和 B 是目录。让我深入探索。
+
+  Read 1 file, listed 2 directories (ctrl+o to expand)
+
+● 现在读取核心材料 — 两个 HTML 样本和实验脚本。
+
+  Read 2 files (ctrl+o to expand)
+
+● 样本 A HTML 已读完——发现一个重要矛盾：任务书说 img 型"没有显式 settings-json"，但样本 A 确实有 settings-json。样本 B
+  HTML 太大，分段读取。
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+
+● 样本 B 也有 settings-json！任务书说两种类型都没有显式 settings-json，但两个样本都有。继续读样本 B HTML 并搜索 JS。
+
+  Searched for 3 patterns, read 1 file (ctrl+o to expand)
+
+● 关键差异已经浮现。现在深入搜索两个 app.js 中的核心模式。
+
+  Searched for 40 patterns, read 4 files (ctrl+o to expand)
+
+● 现在让我最后查看一下脚本的 EbookPlus 桥接逻辑。
+
+  Read 1 file (ctrl+o to expand)
+
+● 我已经收集了足够的证据。现在根据研究任务的交付格式要求，整理最终结论。
+
+  ---
+  EbookPlus 研究交付
+
+  7.1 资源 URL 构造
+
+  子类型 A：img 型
+
+  - 证据来源文件：EbookPlus 样本 A/DFS-4DWESZ6IGMpage=3.html、EbookPlus 样本 A/app.js
+  - 证据位置：
+    - HTML 第 29-30 行：<script type="text/settings" id="settings-json">
+    - app.js 第 13655 行、第 17432 行、第 17648 行
+  - 关键代码或字段：
+
+  "pages": {
+    "resolutions": [
+      {"height":1024, "path":"content/pages/page_${page}/Scale1.png", "scale":1, "width":768},
+      {"height":2048, "path":"content/pages/page_${page}/Scale2.png", "scale":2, "width":1536},
+      {"height":4096, "path":"content/pages/page_${page}/Scale4.png", "scale":4, "width":3072}
+    ],
+    "titles": ["U1","U2","1",...,"296","U3","U4"],
+    "total": 300,
+    "mapping": null
+  }
+
+  // app.js:17648 - zoom-based scale selection
+  var resolutions = tink_state_Observable.get_value(this.__coco_config).pages.resolutions;
+  // 根据 zoom 级别与 scale 乘积选择分辨率
+
+  // app.js:17746 - page index mapping
+  ,mapPageIndex: function(index) {
+      var _g = tink_state_Observable.get_value(this.__coco_config).pages.mapping;
+      if(_g == null) { return index; } else { return _g[index]; }
+  }
+
+  - 结论：
+    - URL 模板 content/pages/page_${page}/Scale{1,2,4}.png 来自 settings-json 中的 pages.resolutions[].path
+    - ${page} 替换为目标 asset index
+    - Scale1/2/4 按 zoom 与 scale 乘积选择：zoom 越大，选越高的 resolution index
+    - 当 mapping 为 null（样本 A 如此），logicalPage == assetIndex；当 mapping 存在，assetIndex = mapping[logicalPage]
+    - 所有配置来自 DOM 中的 settings-json，不需要额外网络请求即可获知 URL 构造规则
+
+  子类型 B：background-image 型
+
+  - 证据来源文件：EbookPlus 样本 B/DFS-VFMPUDAV9Ppage=1.html、EbookPlus 样本 B/app.js
+  - 证据位置：
+    - HTML 第 2055 行：data-resolutions="724,1448,2896"
+    - HTML 第 2058 行起：每页 <div> 含 data-title、data-pos、内嵌 background-image
+    - app.js 第 1654 行、第 9679 行
+  - 关键代码或字段：
+
+  <!-- HTML 第 2055 行 -->
+  <div class="book" data-resolutions="724,1448,2896" data-lod="1">
+
+  <!-- 每个页面（例 page_0 对应 U1） -->
+  <div class="page active" data-title="U1" data-pos="1">
+      <div style="background-image: url('content/pages/page_0/Scale1.png')"></div>
+      <div style="background-image: url('content/pages/page_0/Scale2.png')"></div>
+      <div style="background-image: url('content/pages/page_0/Scale4.png')"></div>
+  </div>
+
+  // app.js:1654
+  this.bookResolutions = this.book.getAttribute("data-resolutions").split(",").map(Std.parseInt);
+
+  // app.js:9679
+  ,getTitle: function(page) {
+      var _g = this.pages[page].getAttribute("data-title");
+      ...
+  }
+
+  - 结论：
+    - URL 是服务端预渲染到 HTML 中的，格式 content/pages/page_{N}/Scale{1,2,4}.png
+    - data-pos = logicalPage（用户在 UI 中看到的页码），page_N 中的 N = data-pos - 1
+    - data-resolutions 提供 Scale1/2/4 对应的宽度值（724, 1448, 2896）
+    - resolution 选择逻辑在 app.js:2087 附近：按 requiredWidth 递增匹配 bookResolutions[i]
+    - logicalPage → assetIndex 规则：assetIndex = data-pos - 1（data-pos 从 1 开始，page_N 从 0 开始）
+    - 每页还伴随 searchwords.svg 用于全文搜索
+
+  两子类型对比
+
+  ┌────────────────────────┬─────────────────────────────────┬────────────────────────────────────────────┐
+  │          维度          │           img 型 (A)            │          background-image 型 (B)           │
+  ├────────────────────────┼─────────────────────────────────┼────────────────────────────────────────────┤
+  │ URL 配置来源           │ settings-json inline JSON       │ HTML 中硬编码 + data-resolutions           │
+  ├────────────────────────┼─────────────────────────────────┼────────────────────────────────────────────┤
+  │ URL 模板               │ ${page} 运行时替换              │ 服务端预渲染完成                           │
+  ├────────────────────────┼─────────────────────────────────┼────────────────────────────────────────────┤
+  │ logicalPage→assetIndex │ mapping[logicalPage] 或直接等同 │ data-pos - 1                               │
+  ├────────────────────────┼─────────────────────────────────┼────────────────────────────────────────────┤
+  │ Scale 选择             │ zoom × scale 乘积               │ requiredWidth vs bookResolutions           │
+  ├────────────────────────┼─────────────────────────────────┼────────────────────────────────────────────┤
+  │ 额外数据               │ data.json (运行时 fetch)        │ config/oebv/.../online.json (运行时 fetch) │
+  └────────────────────────┴─────────────────────────────────┴────────────────────────────────────────────┘
+
+  ---
+  7.2 viewer 分流条件
+
+  - 证据来源文件：
+    - EbookPlus 样本 A/DFS-4DWESZ6IGMpage=3.html
+    - EbookPlus 样本 B/DFS-VFMPUDAV9Ppage=1.html
+    - 两个 app.js
+  - 证据位置：
+    - 样本 A HTML 第 32-33 行：KlettBrowserRuntime.js + app.js
+    - 样本 B HTML 第 26-27 行：css/vendor.css + style.css
+    - 样本 B HTML 第 71 行：var settingsJson = "oebv/oebv_ebp_dfs/online";
+    - 样本 B HTML 第 73 行：<span id="ep2">...
+  - 判断条件：
+    - 不是同一套前端实现。样本 A 使用 KlettBrowserRuntime.js（Haxe 3.4 runtime，命名空间
+  tink_*/coconut_*/dua_*/xdom_*），样本 B 使用另一套 Haxe runtime（命名空间 pagr_*/dua_*，body class dry scriptable）
+    - 样本 A app.js ≈1.1MB，样本 B app.js ≈355KB + vendor/poly.js ≈2.2MB
+    - 样本 A 的 settings-json 是自包含的（含 pages、titles、resolutions、thumbs、windows 等完整配置）
+    - 样本 B 的 settings-json 是骨架配置（仅含功能开关和 annotation 配置），页面数据来自外部 JSON 文件
+  config/oebv/oebv_ebp_dfs/online.json + HTML 预渲染
+    - 样本 B 存在 ep2 加密许可检查（样本 A 无）
+    - 样本 B 使用 data-pagr-bind 属性绑定（样本 A 无）
+    - 两者 productInfo.productForm 相同："oebv_ebp_dfs"
+  - 结论：
+    - 两种 viewer 是两个独立的前端构建产物，共享同一个产品形态标识（oebv_ebp_dfs），但页面结构、JS
+  bundle、数据注入方式均不同
+    - 入口差异在服务端渲染阶段已决定：哪个 HTML 模板被下发取决于教材的构建配置（可能是教材出版年份/版本决定，样本 A
+  buildYear: "2025"，样本 B data-build-year="2021"）
+    - 分流不由浏览器端 JS 运行时判断，而是构建时静态决定
+
+  ---
+  7.3 标题来源
+
+  样本 A
+
+  - 证据来源文件：EbookPlus 样本 A/DFS-4DWESZ6IGMpage=3.html
+  - 证据位置：HTML 第 4 行、第 30 行（settings-json 中 title 字段）
+  - 对象路径 / 字段路径：
+    - <title> 标签文本
+    - JSON.parse(document.getElementById('settings-json').innerText).title
+  - 样例值："Lösungswege 6 E-Book+"
+  - 结论：标题直接来自 inline settings-json 的 title 字段，该字段同时用于 <title> 标签和 viewer UI
+
+  样本 B
+
+  - 证据来源文件：EbookPlus 样本 B/DFS-VFMPUDAV9Ppage=1.html
+  - 证据位置：HTML 第 5 行 <title data-original="way2go! 7" data-build-year="2021">
+  - 对象路径 / 字段路径：
+    - document.querySelector('title').getAttribute('data-original') → 真实书名
+    - document.querySelector('title').textContent → 可能被 JS 覆写
+    - settings-json.productInfo.title → 仅 "E-Book+"（非真实书名）
+  - 样例值："way2go! 7"
+  - 结论：真实书名来自 <title> 标签的 data-original 属性，settings-json.productInfo.title 只含产品形态名
+  "E-Book+"。脚本中 app.js:1668 会用 productInfo.title 覆写 <title> 的 innerHTML，所以必须在脚本覆写前读取
+  data-original。
+
+  桥梁验证
+
+  书架标题（来自 书架入口与跳转链.md）：
+  - 样本 A 书架标题 "Lösungswege Mathematik Oberstufe 6, Schülerbuch mit E-BOOK+" → portal 标题 "Lösungswege 6
+  E-Book+"（截断形式）
+  - 样本 B 书架标题 "way2go! 7. Coursebook, Schülerbuch mit E-BOOK+" → portal 标题 "way2go! 7"（截断形式）
+
+  ---
+  7.4 页码 / 总页数 / 偏移来源
+
+  样本 A
+
+  - 证据来源文件：EbookPlus 样本 A/DFS-4DWESZ6IGMpage=3.html、EbookPlus 样本 A/app.js
+  - 证据位置：HTML 第 30 行 settings-json；app.js 第 17310、17377-17383 行
+  - 对象路径 / 字段路径：
+    - settings-json.pages.total → 300
+    - settings-json.pages.titles[] → ["U1","U2","1","2",...,"296","U3","U4"]
+    - settings-json.pages.mapping → null（此样本无偏移，logicalPage == assetIndex）
+    - settings-json.directoryPage → 4（目录页 logicalPage）
+  - 样例值：total=300, titles 长度 300, directoryPage=4
+  - 结论：全部是 settings-json 中的显式配置，不是运行时计算。titles 中 U1/U2 是封面内页，U3/U4
+  是封底内页，中间是正文数字页。
+
+  样本 B
+
+  - 证据来源文件：EbookPlus 样本 B/DFS-VFMPUDAV9Ppage=1.html、EbookPlus 样本 B/app.js
+  - 证据位置：
+    - HTML 第 381-806 行：titleToPage / pageToTitle inline JS
+    - HTML 第 2055 行：data-resolutions="724,1448,2896"
+    - HTML 第 2057-24796 行：每页 <div class="page" data-pos="N" data-title="X">
+  - 对象路径 / 字段路径：
+    - document.querySelectorAll('.pagr .page').length → 213 页
+    - data-pos 属性：0-212（0 为封面，1-212 为有效页面）
+    - data-title 属性：U1, U2, 1-208, U3, U4
+    - titleToPage / pageToTitle：title ↔ data-pos 双向映射
+  - 样例值：total=212（data-pos 有效范围），titles：U1/U2 + 1..208 + U3/U4
+  - 结论：
+    - 总页数 = querySelectorAll('.page[data-title]').length（213 个 page div，其中 1 个 data-pos=0 无 data-title，212
+  个有 data-title）
+    - U1/U2/U3/U4 标签来自 inline JS pageToTitle
+    - 没有显式的 directoryPage（样本 B 的 settings-json 不含此字段）
+    - logicalPage（data-pos）与 assetIndex（page_N 中的 N）的偏移为 -1：assetIndex = data-pos - 1
+    - 这是服务端预渲染（HTML 硬编码），不是运行时计算
+
+  ---
+  7.5 真实 bookId 来源
+
+  - 证据来源文件：
+    - 书架入口与跳转链.md
+    - EbookPlus 样本 A/DFS-4DWESZ6IGMpage=3.html
+    - EbookPlus 样本 B/DFS-VFMPUDAV9Ppage=1.html
+    - ../../archive/userscripts/V13.12.1.user.js.dev.txt
+  - 证据位置：
+    - 样本 A settings-json：annotations.sync.server.baseParameter.dienstId = "DFS-4DWESZ6IGM"
+    - 样本 B settings-json：annotations.sync.server.baseParameter.dienstId = "DFS-VFMPUDAV9P"
+    - 样本 A 书架入口 DOM：img[src="https://a.digi4school.at/thumb/13915"]
+    - 样本 B 书架入口 DOM：img[src="https://a.digi4school.at/thumb/5917"]
+    - 脚本第 115-153 行：parseLocation() — 在 portal 页从 bridge 读取 bookId
+  - 对象路径 / 字段路径：
+    - settings-json.annotations.sync.server.baseParameter.dienstId → DFS token（不是真实编号）
+    - settings-json.productInfo.productNumber → ISBN（样本 A: "978-3-209-11506-5"，样本 B: "978-3-209-11060-2"）
+    - settings-json.productInfo.projectId → 内部项目号（样本 A: "517-17"，样本 B: "475-5"）
+    - 真实编号（13915、5917）仅在书架 overview 页面的 thumb/{N} URL 中出现
+  - 样例值：
+    - 样本 A：dienstId=DFS-4DWESZ6IGM，productNumber=978-3-209-11506-5，projectId=517-17，真实编号=13915
+    - 样本 B：dienstId=DFS-VFMPUDAV9P，productNumber=978-3-209-11060-2，projectId=475-5，真实编号=5917
+  - 结论：
+    - 在最终 portal 页中无法独立恢复真实教材编号
+    - portal 页只有 DFS token（dienstId）、ISBN（productNumber）、内部 projectId，均不等于 thumb/13915 这种数字
+    - 当前脚本使用 GM_setValue 桥接：在 overview 路由页写入 bridge → 在 portal 页通过 readEbookPlusBridge() 读取
+    - 必须依赖书架入口桥接，没有其他已知替代路径
+    - 备注：dienstId 的 DFS- 前缀暗示 Digi4School File System，是服务端分配的文件系统标识，不直接编码真实书号
+
+  ---
+  7.6 目录来源
+
+  - 证据来源文件：
+    - EbookPlus 样本 A/DFS-4DWESZ6IGMpage=3.html、EbookPlus 样本 A/app.js
+    - EbookPlus 样本 B/DFS-VFMPUDAV9Ppage=1.html、EbookPlus 样本 B/app.js
+  - 证据位置：全文搜索
+  - 对象路径 / 字段路径：不适用
+  - 样例值：不适用
+  - 结论：
+    - 未发现目录源
+    - 两个样本的 HTML 和 JS 中均不包含 chapter、kapitel、toc、inhaltsverzeichnis、outline、navPoint 等章节/目录结构
+    - 样本 A 的 menus 字段定义的是内容叠加层（Verstehen、Üben、Prüfen、Sprungmarke、Multimedia），不是章节导航
+    - 样本 B 的 data-layer-* 属性也是内容叠加层分类，不是目录
+    - 样本 A 的 payload: "data.json" 可能包含额外结构数据（运行时 fetch），但我们没有该文件的样本，无法确认
+    - 原因：两个样本的页面结构中均无目录语义；如果目录确实存在，最可能藏在 data.json（样本 A）或
+  config/oebv/oebv_ebp_dfs/online.json（样本 B）中
+    - 还缺的证据：样本 A 的 data.json 抓包内容和样本 B 的 config/oebv/oebv_ebp_dfs/online.json 抓包内容
+
+  ---
+  7.7 最终判断
+
+  已确认可复用的统一点
+
+  1. 页码输入层：两子类型都有 logicalPage 概念（data-pos / titles 数组），且页码标签体系（U1/U2/数字/U3/U4）一致 →
+  页码输入 UI 可统一
+  2. settings-json 存在：任务书原称两类型"没有显式 settings-json"，实际两个样本都有 <script type="text/settings"
+  id="settings-json"> → 配置读取入口可统一于此节点
+  3. productInfo 结构：两样本的 productInfo（productForm、productNumber、projectId、appVersion）字段语义一致 →
+  产品身份信息可统一提取
+  4. annotations 同步配置：两样本的 annotations.sync.server.baseParameter（dienstId、mandant、bookshelfId）结构相同 →
+  annotation 接口可统一
+  5. 资源 URL 构造模式：都是 content/pages/page_{N}/Scale{1,2,4}.png → 资源路径格式一致
+  6. Scale 分辨率体系：都是 Scale1/Scale2/Scale4 三级 → 分辨率选择逻辑可统一
+
+  已确认不能拍脑袋假设的点
+
+  1. 两种 viewer 不是同一套前端实现：代码结构、命名空间、数据注入方式均不同
+  2. 样本 A 的 mapping 为 null 不代表所有 img 型书都没有 mapping：当 mapping 存在时 logicalPage ≠ assetIndex
+  3. 样本 B 的 title 来自 <title data-original>，不是来自 settings-json.productInfo.title：两样本 title 来源路径不同
+  4. 真实 bookId 在 portal 页无法恢复：必须依赖 overview 书架桥接，dienstId/productNumber/projectId 都不是真实编号
+  5. 目录/章节源当前不存在于静态 HTML 和 JS 中：不能假设 data.json 一定包含目录
+  6. directoryPage 仅样本 A 有（=4），样本 B 没有对应字段
+
+  如果后续继续开发，最先该解决的单一阻塞是什么
+
+  恢复 portal 页的真实 bookId。目前必须靠 GM_setValue 桥接（overview → portal），这在以下场景会断：直接打开 portal
+  URL、书签恢复、跨设备同步。如果能在 portal 页通过 settings-json + data.json（或 online.json）反向解析出 thumb/13915
+  格式的真实编号，整个 Ebook 与 EbookPlus 的身份语义才能统一。dienstId（DFS
+  token）与真实书号的映射关系是当前最大的单点阻塞。
+
+  ---
+  备注：本报告基于已提供的两个样本。任务书第 4.2 节称两种 viewer "没有显式
+  settings-json"，此断言与样本事实不符——两个样本的 HTML 中均存在完整的 <script type="text/settings" id="settings-json">
+  节点。建议将此修正为"settings-json 存在但内容结构有差异"。
+
+✻ Baked for 8m 56s

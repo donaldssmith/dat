@@ -1,0 +1,22 @@
+{
+  "primary_target": "huggingface",
+  "targets": {
+    "huggingface": {
+      "label": "Hugging Face（主发布）",
+      "enabled": true,
+      "blocked": false,
+      "remote_url": "https://huggingface.co/datasets/your-account/your-dataset",
+      "branch": "main",
+      "token": "",
+      "token_env": "HF_TOKEN"
+    },
+    "github": {
+      "label": "GitHub（后备）",
+      "enabled": false,
+      "blocked": true,
+      "remote_name": "origin",
+      "remote_url": "",
+      "branch": "main"
+    }
+  }
+}
